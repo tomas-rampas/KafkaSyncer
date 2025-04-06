@@ -119,20 +119,20 @@ if [ $? -ne 0 ]; then
 fi
 
 # Consume one message to ensure group metadata is active
-echo -e "\nConsume one message to ensure group metadata is active"
-timeout 10s $KAFKA_BIN/kafka-console-consumer \
-  --bootstrap-server "$TARGET_BROKER" \
-  --group "$GROUP_ID" \
-  --topic "$TOPIC" \
-  # --partition "$PARTITION" \
-  --offset earliest \
-  --max-messages 1 \
-  --property print.offset=false \
-  --property auto.commit.enable=true
+#echo -e "\nConsume one message to ensure group metadata is active"
+#timeout 10s $KAFKA_BIN/kafka-console-consumer \
+#  --bootstrap-server "$TARGET_BROKER" \
+#  --group "$GROUP_ID" \
+#  --topic "$TOPIC" \
+#  # --partition "$PARTITION" \
+#  # --offset earliest \
+#  # --max-messages 1 \
+#  --property print.offset=false \
+#  --property auto.commit.enable=true
 
-if [ $? -ne 0 ]; then
-  echo "Warning: Failed to consume a message with $GROUP_ID on target (continuing anyway)."
-fi
+#if [ $? -ne 0 ]; then
+#  echo "Warning: Failed to consume a message with $GROUP_ID on target (continuing anyway)."
+#fi
 
 sleep 2  # Allow offset to commit
 
