@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" Version="2.9.0" />
+    <PackageReference Include="Confluent.Kafka.Extensions" Version="1.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="C:\Users\User\.nuget\packages\confluent.kafka.extensions\1.0.0\contentFiles\any\netstandard1.3\librdkafka.dll" />
+    <Content Remove="C:\Users\User\.nuget\packages\confluent.kafka.extensions\1.0.0\contentFiles\any\netstandard1.3\librdkafkacpp.dll" />
+    <Content Remove="C:\Users\User\.nuget\packages\confluent.kafka.extensions\1.0.0\contentFiles\any\netstandard1.3\msvcr120.dll" />
+    <Content Remove="C:\Users\User\.nuget\packages\confluent.kafka.extensions\1.0.0\contentFiles\any\netstandard1.3\zlib.dll" />
+  </ItemGroup>
+
+</Project>
