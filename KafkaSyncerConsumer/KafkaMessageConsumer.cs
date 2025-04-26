@@ -37,8 +37,8 @@ public class KafkaMessageConsumer
             try
             {
                 var topicPartition = new TopicPartition(_topic, 0);
-                WatermarkOffsets watermarkOffsets = consumer.GetWatermarkOffsets(topicPartition);
-                Console.WriteLine($"{watermarkOffsets.High.Value} - {watermarkOffsets.Low.Value}");
+                //WatermarkOffsets watermarkOffsets = consumer.GetWatermarkOffsets(topicPartition);
+                //Console.WriteLine($"{watermarkOffsets.High.Value} - {watermarkOffsets.Low.Value}");
                 
                 while (!cancellationToken.IsCancellationRequested)
                 {

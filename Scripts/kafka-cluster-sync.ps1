@@ -9,7 +9,7 @@ $KAFKA_HOME = "D:/apps/kafka_2.13-4.0.0"
 $KAFKA_BIN = "$KAFKA_BASE/bin/windows/"
 $TEMP_FILE = "D:\tmp\messages.txt"
 $EMPTY_MESSAGES_FILE = "D:\tmp\empty_messages.txt"
-
+$GENERATE_EMPTY_MESSAGES = $false
 $KAFKA_OPTS = "set KAFKA_OPTS=-Dlog4j2.configurationFile=file:$KAFKA_HOME/config/tools-log4j2.yaml &"
 
 # Ensure the temp directory exists
@@ -122,18 +122,18 @@ catch
 }
 
 # Step 3.1: Produce empty messages to align offset
-$EMPTY_MESSAGES_NEEDED = [int]$SOURCE_LOG_END_OFFSET - [int]$MESSAGE_COUNT
-if ($EMPTY_MESSAGES_NEEDED -gt 0) {
-    Write-Host "Producing empty $EMPTY_MESSAGES_NEEDED messages to $TARGET_BROKER..."
+$EMPTY_MESSAGES_COUNT = [int]$SOURCE_LOG_END_OFFSET - [int]$MESSAGE_COUNT
+if ($EMPTY_MESSAGES_COUNT -gt 0 -and $GENERATE_EMPTY_MESSAGES) {
+    Write-Host "Producing empty $EMPTY_MESSAGES_COUNT messages to $TARGET_BROKER..."
 
     # Create the file with the required number of empty lines
-    1..$EMPTY_MESSAGES_NEEDED | ForEach-Object {
+    1..$EMPTY_MESSAGES_COUNT | ForEach-Object {
         # We'll use a JSON with a special flag to identify these as placeholder messages
         "{`"_placeholder`": true, `"_index`": $($_)}" | Out-File -FilePath $EMPTY_MESSAGES_FILE -Append -Encoding utf8
     }
 
     # Produce these empty messages to advance the offset
-    Write-Host "Producing $EMPTY_MESSAGES_NEEDED empty messages to advance offset..."
+    Write-Host "Producing $EMPTY_MESSAGES_COUNT empty messages to advance offset..."
     Get-Content $EMPTY_MESSAGES_FILE | cmd /c "${KAFKA_OPTS} ${KAFKA_BIN}kafka-console-producer.bat" --bootstrap-server $TARGET_BROKER `
         --topic $TOPIC --request-required-acks all --sync --property print.value=true --property print.partition=true `
         --property print.timestamp=true -property log.level=DEBUG
@@ -184,24 +184,22 @@ if ($resetProcess.ExitCode -ne 0)
 Start-Sleep -Seconds 2  # Allow offset to commit
 
 # Sync the offset to the source value for partition 0
-Write-Host "Setting offset $OFFSET for group $GROUP_ID on target cluster..."
-$syncProcess = Start-Process -FilePath "cmd" -ArgumentList "/c ${KAFKA_OPTS} `"${KAFKA_BIN}kafka-consumer-groups.bat`" --bootstrap-server $TARGET_BROKER --group $GROUP_ID --topic ${TOPIC}:${PARTITION} --reset-offsets --to-offset $OFFSET --execute" -NoNewWindow -Wait -PassThru
+$OFFSET_NEW = $OFFSET
+if(-not $GENERATE_EMPTY_MESSAGES -and $EMPTY_MESSAGES_COUNT -gt 0){
+    $OFFSET_NEW = $OFFSET - $EMPTY_MESSAGES_COUNT
+}
+Write-Host "Setting offset $OFFSET_NEW for group $GROUP_ID on target cluster..."
+$syncProcess = Start-Process -FilePath "cmd" -ArgumentList "/c ${KAFKA_OPTS} `"${KAFKA_BIN}kafka-consumer-groups.bat`" --bootstrap-server $TARGET_BROKER --group $GROUP_ID --topic ${TOPIC}:${PARTITION} --reset-offsets --to-offset $OFFSET_NEW --execute" -NoNewWindow -Wait -PassThru
 if ($syncProcess.ExitCode -ne 0)
 {
-    Write-Host "Error: Failed to set offset $OFFSET on target cluster for partition $PARTITION."
+    Write-Host "Error: Failed to set offset $OFFSET_NEW on target cluster for partition $PARTITION."
     Remove-Item -Path $TEMP_FILE -Force -ErrorAction SilentlyContinue
     exit 1
 }
 
-# 4.9
-# Set the consumer group offset to 30 for the topic/partition on the target broker
-# Write-Host "Setting consumer group $GROUP_ID offset to $SOURCE_LOG_END_OFFSET for $TOPIC partition $PARTITION on target broker..."
-# cmd /c "${KAFKA_OPTS} ${KAFKA_BIN}kafka-consumer-groups.bat --bootstrap-server $TARGET_BROKER --group $GROUP_ID --topic ${TOPIC}:${PARTITION} --reset-offsets --to-offset $SOURCE_LOG_END_OFFSET --execute 2>nul"
-
-
 # Step 5: Verify message count on target using my-group
 Write-Host "`nVerifying message count on target cluster ($TARGET_BROKER) with group $GROUP_ID..."
-$RAW_TARGET_OUTPUT = cmd /c "${KAFKA_OPTS} ${KAFKA_BIN}kafka-consumer-groups.bat --bootstrap-server $TARGET_BROKER --group $GROUP_ID --describe 2> nul"
+$RAW_TARGET_OUTPUT = cmd /c "${KAFKA_OPTS} ${KAFKA_BIN}kafka-consumer-groups.bat --bootstrap-server $TARGET_BROKER --group $GROUP_ID --describe 2>nul"
 Write-Host "Raw output from kafka-consumer-groups (target):"
 Write-Host ($RAW_TARGET_OUTPUT -join "`r`n")
 
@@ -213,17 +211,32 @@ if (-not $TARGET_LOG_END_OFFSET)
     exit 1
 }
 
-if ([int]$SOURCE_LOG_END_OFFSET -ne [int]$TARGET_LOG_END_OFFSET)
-{
-    Write-Host "Error: Message count mismatch. Source: $SOURCE_LOG_END_OFFSET, Target: $TARGET_LOG_END_OFFSET"
+if($MESSAGE_COUNT -ne [int]$TARGET_LOG_END_OFFSET) {
+    Write-Error "Error: Message count mismatch. Source: $MESSAGE_COUNT, Target: $TARGET_LOG_END_OFFSET"
     Remove-Item -Path $TEMP_FILE -Force -ErrorAction SilentlyContinue
     exit 1
+}
+
+if ([int]$SOURCE_LOG_END_OFFSET -ne [int]$TARGET_LOG_END_OFFSET)
+{
+    Write-Warning "Warning: LOG_END_OFFSET count mismatch. Source: $SOURCE_LOG_END_OFFSET, Target: $TARGET_LOG_END_OFFSET"
+}
+
+if ($GENERATE_EMPTY_MESSAGES -and $OFFSET -ne $OFFSET_NEW)
+{
+    Write-Warning "Warning: CURRENT_OFFSET mismatch. Source: $OFFSET, Target: $OFFSET_NEW"
 }
 
 Write-Host "Verified: $TARGET_LOG_END_OFFSET messages copied to target"
 
 # Cleanup
 Remove-Item -Path $TEMP_FILE -Force -ErrorAction SilentlyContinue
-Write-Host "Successfully copied $SOURCE_LOG_END_OFFSET messages and synced offset $OFFSET for group $GROUP_ID to $TARGET_BROKER"
+Write-Host "Successfully copied $MESSAGE_COUNT messages and synced offset $OFFSET_NEW for group $GROUP_ID to $TARGET_BROKER"
+
+Write-Host "`nChecking target cluster ($TARGET_BROKER)..."
+$RAW_OUTPUT = cmd /c "${KAFKA_OPTS} ${KAFKA_BIN}kafka-consumer-groups.bat --bootstrap-server $TARGET_BROKER --group $GROUP_ID --describe"
+Write-Host "Raw output from kafka-consumer-groups (source):"
+Write-Host ($RAW_OUTPUT -join "`r`n")
+Write-Host "`n`nAll Done" -ForegroundColor Green
 
 exit 0
