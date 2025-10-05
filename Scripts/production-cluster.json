@@ -1,0 +1,20 @@
+{
+  "ZooKeeperNodes": [
+    {
+      "Host": "zk1.yourdomain.com",
+      "IP": "192.168.1.101",
+      "Port": 2181,
+      "User": "kafka",
+      "Password": "your-password-here"
+    }
+  ],
+  "KafkaNodes": [
+    {
+      "Host": "broker1.yourdomain.com",
+      "IP": "192.168.1.201",
+      "Port": 9093,
+      "User": "kafka",
+      "Password": "your-password-here"
+    }
+  ]
+}
